@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include <pcap.h>
 #include <arpa/inet.h>
@@ -25,15 +26,6 @@ struct ARP_HEADER{
     u_int8_t Target_Mac[6];
     struct in_addr Target_IP;
 };
-
-	/*
-	char* abc = "192.168.32.1";
-	struct	in_addr kk;
-	printf("gogodo\n");
-	inet_pton(AF_INET, abc, &kk.s_addr);
-	printf("%lu\n", kk.s_addr);
-	printf("goood\n");*/
-
 int main(int argc, char* argv[])
 {
 	char* dev;
@@ -41,10 +33,10 @@ int main(int argc, char* argv[])
 	char* SourceMac;
 	struct ETHERNET_HEADER *ethernet;
 	struct ARP_HEADER *arp;
-	char *sender_ip = "192.168.127.135";
-	char *target_ip = "192.168.127.131";
-	struct in_addr sender;
-	struct in_addr target;
+	char *sender_ip;
+	char *target_ip;
+	u_int32_t sender;
+	u_int32_t target;
 	int i = 0;
 	int res;
 	struct bpf_program *fp;
@@ -54,19 +46,19 @@ int main(int argc, char* argv[])
 	pcap_t *handle;
 	u_char packet[42];
 	u_char* temp;
-
-	ethernet = (struct ETHERNET_HEADER*)malloc(sizeof(struct ETHERNET_HEADER));
-	arp = (struct ARP_HEADER *)malloc(sizeof(struct ARP_HEADER));
-
-	dev = pcap_lookupdev(errbuf);
-	printf("%s\n", dev);
-	if(dev == NULL){
 	
-		printf("Can't Found Device\n");
+	if(argc == 1 || argc >4 ){
+		printf("%s [Interface] [Sender IP] [Victim IP]\n",argv[0]);
 		exit(1);
 	}
-
-	handle = pcap_open_live(dev, BUFSIZ, 0, -1, errbuf);
+	
+	printf("%s\n", argv[2]);
+	printf("%s\n", argv[3]);
+	inet_aton(argv[2], &sender);
+	inet_aton(argv[3], &target);	
+	ethernet = (struct ETHERNET_HEADER*)malloc(sizeof(struct ETHERNET_HEADER));
+	arp = (struct ARP_HEADER *)malloc(sizeof(struct ARP_HEADER));
+	handle = pcap_open_live(argv[1], BUFSIZ, 0, -1, errbuf);
 	
 	//////////////////////////////////////////////
 	//////Making Packet to know Victim's MAC//////
@@ -101,14 +93,14 @@ int main(int argc, char* argv[])
 	packet[26] = 0x4d;
 	packet[27] = 0xee;
 
-       /*
-	inet_pton(AF_INET, sender_ip, &sender.s_addr);
-	arp->Sender_IP = sender;
-    */
+       for(i=0; i<4; i++){
+		packet[28+i] = sender >> i*8;
+		printf("%x\n", packet[28+i]);
+	}/*
     packet[28] = 192;
     packet[29] = 168;
     packet[30] = 127;
-    packet[31] = 135;
+    packet[31] = 135;*/
            
 	packet[32] = 0x00;
 	packet[33] = 0x00;
@@ -120,11 +112,15 @@ int main(int argc, char* argv[])
 	inet_pton(AF_INET, target_ip, &target.s_addr);
 	arp->Target_IP = target;
     */
+	for(i=0;i<4; i++){
+		packet[38+i] = target >> i*8;
+		printf("%x\n", packet[38+i]);
+	}/*
 	packet[38] = 192;
     packet[39] = 168;
     packet[40] = 127;
-    packet[41] = 131;
-	
+    packet[41] = 131;*/
+		pcap_sendpacket(handle, packet, 42);
 
 
 	///////////////////////////////////////////////////////
