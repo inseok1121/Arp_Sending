@@ -7,6 +7,10 @@
 #include <stdint.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
+#include <netdb.h>
+#include <linux/if.h>
+#include <sys/ioctl.h>
+#include <sys/socket.h>
 #define ETHERNET_SIZE 14
 struct ETHERNET_HEADER{
     u_int8_t Destination_Mac[6];
@@ -41,13 +45,26 @@ int main(int argc, char* argv[])
     const u_char* rev_packet;
     pcap_t *handle;
     u_char packet[42];
-
+    ////////////////////////////////////
+    ///////Variable For Getting Mac/////
+    ////////////////////////////////////
+    struct ifreq s;
+    int fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
 
     if(argc == 1 || argc >4 ){
         printf("%s [Interface] [Sender IP] [Victim IP]\n",argv[0]);
         exit(1);
     }
-
+    ////////////////////////////////////
+    ///////Getting Mac Add//////////////
+    ////////////////////////////////////
+    strcpy(s.ifr_name, argv[1]);
+    if( ioctl(fd, SIOCGIFHWADDR, &s) == 0){
+        int i;
+        for(i=0; i<6; i++){
+	    packet[6+i] = s.ifr_addr.sa_data[i];	    	
+	}
+    }
     printf("%s\n", argv[2]);
     printf("%s\n", argv[3]);
     sender = inet_addr(argv[2]);
@@ -63,12 +80,7 @@ int main(int argc, char* argv[])
     for (i = 0; i < 6; i++) {
         packet[i] = 0xff;
     }
-    packet[6] = 0x00;
-    packet[7] = 0x0c;
-    packet[8] = 0x29;
-    packet[9] = 0xac;
-    packet[10] = 0x4c;
-    packet[11] = 0xee;
+
     packet[12] = 0x08;
     packet[13] = 0x06;
 
@@ -93,7 +105,6 @@ int main(int argc, char* argv[])
 
     for(i=0; i<4; i++){
         packet[28+i] = sender >> i*8;
-        printf("%x\n", packet[28+i]);
     }
     ////////////////////////////////////////
     //////////Victim Mac and IP/////////////
@@ -106,7 +117,6 @@ int main(int argc, char* argv[])
     packet[37] = 0x00;
     for(i=0;i<4; i++){
         packet[38+i] = target >> i*8;
-        printf("%x\n", packet[38+i]);
     }
 
 
@@ -129,7 +139,6 @@ int main(int argc, char* argv[])
         }else{
             ethernet = (struct ETHERNET_HEADER *)(rev_packet);
             arp = (struct ARP_HEADER *)(rev_packet+ETHERNET_SIZE);
-            printf("%d\n", arp->Opcode);
             if(arp->Opcode == 512){
                 printf("Found..!!\n");
                 break;
